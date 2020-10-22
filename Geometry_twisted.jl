@@ -28,16 +28,16 @@ function get_lattice_3D_rotated(lattice,n_a1,n_a2,z,theta,r0)   #theta in units 
     if lattice=="triangular"
         a1=[1,0,0]
         a2=[1/2,-sqrt(3)/2,0]
-        R=geometry_simple_3D_rotated(n_a1,n_a2,a1,a2,z,theta,r0)
+        R,a1,a2=geometry_simple_3D_rotated(n_a1,n_a2,a1,a2,z,theta,r0)
     elseif lattice=="square"
         a1=[1,0,0]
         a2=[0,1,0]
-        R=geometry_simple_3D_rotated(n_a1,n_a2,a1,a2,z,theta,r0)
+        R,a1,a2=geometry_simple_3D_rotated(n_a1,n_a2,a1,a2,z,theta,r0)
     elseif lattice=="honeycomb"
         a1=[sqrt(3),0,0]
         a2=[sqrt(3)/2,-3/2,0]
         a3=[sqrt(3)/2,-1/2,0]
-        R=geometry_bipartite_3D_rotated(n_a1,n_a2,a1,a2,a3,z,theta,r0)
+        R,a1,a2=geometry_bipartite_3D_rotated(n_a1,n_a2,a1,a2,a3,z,theta,r0)
     else
         println("invalid lattice")
     end
@@ -61,7 +61,7 @@ function geometry_simple_3D_rotated(n,m,a1,a2,z,theta,r0)
             push!(R,i*a1+j*a2+R0)
         end
     end
-    return R
+    return R,a1,a2
 end
 
 function geometry_bipartite_3D_rotated(n,m,a1,a2,a3,z,theta,r0)
@@ -78,7 +78,7 @@ function geometry_bipartite_3D_rotated(n,m,a1,a2,a3,z,theta,r0)
             end
         end
     end
-    return R
+    return R,a1,a2
 end
 
 function get_inter_vector_3D(n,m,a1,a2)
@@ -143,7 +143,7 @@ function check_site_in_unit_cell(site,A1,A2)      #check whether site is in unit
     num3=site[1]*A2[2]-site[2]*A2[1]              
     alpha=num3/num
     beta=-num2/num                                # site=alpha*a1+beta*a2
-    if -1/2<round(alpha,digits=10)<=1/2 && -1/2<round(beta,digits=10)<=1/2
+    if -0.50<round(alpha,digits=10)<=0.50 && -0.50<round(beta,digits=10)<=0.50
         return true
     else 
         return false
@@ -171,14 +171,14 @@ end
 
 function check_R(R_unitcell,inter_vector,R)
     n_inter=size(inter_vector,1)
-    R=[round.(x,digits=5) for x in R]
+    R=[round.(x,digits=3) for x in R]
     #println(R)
     N=size(R_unitcell,1)
     for ii=2:n_inter
         r=inter_vector[ii]
         for i=1:N
             R0=R_unitcell[i]+r
-            R0=round.(R0,digits=5)
+            R0=round.(R0,digits=3)
             #println(R0)
             if !(R0 in R)
                 println(R0)
@@ -206,12 +206,16 @@ end
 function get_twisted_lattice(BC,lattice,n_a1,n_a2,m,r,d,r0)
     R,a1,a2=get_lattice_3D_rotated(lattice,n_a1,n_a2,0,0,[0,0,0])
     theta, A1, A2=get_theta(m,r,a1,a2)
+    #println(R)
+    #A1=A1/2
     R2,a1_2,a2_2=get_lattice_3D_rotated(lattice,n_a1,n_a2,d,theta,r0)
     R=merge_R(R,R2)
+    
     R_unitcell,n1,n2=get_unit_cell(R,A1,A2)
     #plot_R(R)
     if !(n1==n2)
         println("number of sites on different layers mismatch: ", n1," ",n2)
+        return 0
     end
 
     if BC=="PBC"
@@ -238,18 +242,100 @@ function get_reciprocal_vector(A1,A2)
     b2=[B2[1],B2[2]]
     return b1,b2
 end
-#n_a1=200
-#n_a2=200
-#m=20
+
+
+
+
+
+
+
+
+function get_lattice_3D_rotated_2(lattice,n_a1,n_a2,z,theta,r0,a)   #theta in units of 1, z: layer-index  #add confinement in unitcell, r0: parallel alignment of layer, a=lattice constant   
+    if lattice=="triangular"
+        a1=[1,0,0]*a
+        a2=[1/2,-sqrt(3)/2,0]*a
+        #println(a1,a2)
+        R,a1,a2=geometry_simple_3D_rotated(n_a1,n_a2,a1,a2,z,theta,r0)
+    elseif lattice=="square"
+        a1=[1,0,0]*a
+        a2=[0,1,0]*a
+        R,a1,a2=geometry_simple_3D_rotated(n_a1,n_a2,a1,a2,z,theta,r0)
+    elseif lattice=="honeycomb"
+        a1=[sqrt(3),0,0]*a
+        a2=[sqrt(3)/2,-3/2,0]*a
+        a3=[sqrt(3)/2,-1/2,0]*a
+        R,a1,a2=geometry_bipartite_3D_rotated(n_a1,n_a2,a1,a2,a3,z,theta,r0)
+    else
+        println("invalid lattice")
+    end
+    
+    return R,a1,a2
+end
+
+function get_twisted_lattice_2(BC,lattice,n_a1,n_a2,m,r,d,r0)
+    R,a1,a2=get_lattice_3D_rotated_2(lattice,n_a1,n_a2,0,0,[0,0,0],2)
+    theta, A1, A2=get_theta(m,r,a1,a2)
+    R2,a1_2,a2_2=get_lattice_3D_rotated_2(lattice,n_a1,n_a2,d,theta,r0,2)
+    R=merge_R(R,R2)
+    R_unitcell,n1,n2=get_unit_cell_2(R,A1,A2,a1,a2,a1_2,a2_2)
+    #plot_R(R)
+    if !(n1==n2)
+        println("number of sites on different layers mismatch: ", n1," ",n2)
+        return 0
+    end
+
+    if BC=="PBC"
+        inter_vector=get_inter_vector_3D(1,1,A1,A2)
+    elseif BC=="OBC"
+        inter_vector=[[0,0,0]]
+    else
+        println("invalid bundary condition, using OBC by default")
+        inter_vector=[[0,0,0]]
+    end
+
+    R,a1,a2=get_lattice_3D_rotated_2(lattice,4*n_a1,4*n_a2,0,0,(a1+a2)/4,1)
+    R2,a1_2,a2_2=get_lattice_3D_rotated_2(lattice,4*n_a1,4*n_a2,d,theta,r0+(a1_2+a2_2)/4,1)
+    R=merge_R(R,R2)
+    if !(check_R(R_unitcell,inter_vector,R))
+        println("wrong unitvector, superstructure not periodic; or R not large enough")
+    end
+    
+    return R_unitcell, inter_vector, A1, A2, theta
+end
+
+function get_unit_cell_2(R,A1,A2,a1,a2,a1_2,a2_2)
+    R_unitcell=[]
+    N=size(R,1)
+    n1=0
+    n2=0
+    for i=1:N
+        if check_site_in_unit_cell(R[i],A1,A2)
+            if R[i][3]==0
+                n1=n1+1
+                push!(R_unitcell,R[i],R[i]+a1/2,R[i]+a2/2,R[i]+a1/2+a2/2)
+            elseif round(R[i][3],digits=2)==1
+                n2=n2+1
+                push!(R_unitcell,R[i],R[i]+a1_2/2,R[i]+a2_2/2,R[i]+a1_2/2+a2_2/2)
+            end
+        end
+    end
+
+    return R_unitcell,n1,n2
+end
+
+#n_a1=50
+#n_a2=50
+#m=5
 #r=1
-#r0=[0,0.5,0]
+#r0=[0,0,0]
 #d=1
-#geometry="triangular"
+#lattice,mode="triangular","pi_flux"
 #BC="PBC"
 
-#R_unitcell, inter_vector=get_twisted_lattice(BC,geometry,n_a1,n_a2,m,r,d,r0)
-
-#plot_R_unitcell(R_unitcell,inter_vector)
+#R_unitcell, inter_vector, A1, A2, theta=get_twisted_lattice_2(BC,lattice,n_a1,n_a2,m,r,d,r0)
+#println(180*theta/pi)
+#println(size(R_unitcell,1))
+#plot_R_unitcell(R_unitcell,[[0,0,0]])
 
 
 
