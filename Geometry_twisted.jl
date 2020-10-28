@@ -20,8 +20,9 @@ end
 function get_theta(m,r,a1,a2)
     theta=acos((3*m^2+3*m*r+r^2/2)/(3*m^2+3*m*r+r^2))
     A1=m*a2+(m+r)*a1
-    A2=-(m+r)*a2+(2*m+r)*a1                                      # the a1,a2 in literature is the opposite definition from here
-    return theta, A1, A2
+    A2=-(m+r)*a2+(2*m+r)*a1                                     # the a1,a2 in literature is the opposite definition from here
+    n=3*m^2+3*m*r+r^2
+    return theta, A1, A2, n
 end
 
 function get_lattice_3D_rotated(lattice,n_a1,n_a2,z,theta,r0)   #theta in units of 1, z: layer-index  #add confinement in unitcell, r0: parallel alignment of layer 
@@ -55,10 +56,12 @@ function geometry_simple_3D_rotated(n,m,a1,a2,z,theta,r0)
     a1=U*a1
     a2=U*a2
     R0=[0,0,z]-(n-1)/2*a1-(m-1)/2*a2+r0                                  # s.t. the second layer is rotated w.r.t. [0,0]
-    R=[]
+    R=Array{Any}(undef,n*m)
+    ii=1
     for i=0:n-1
         for j=0:m-1
-            push!(R,i*a1+j*a2+R0)
+            R[ii]=i*a1+j*a2+R0
+            ii=ii+1
         end
     end
     return R,a1,a2
@@ -81,7 +84,7 @@ function geometry_bipartite_3D_rotated(n,m,a1,a2,a3,z,theta,r0)
     return R,a1,a2
 end
 
-function get_inter_vector_3D(n,m,a1,a2)
+function get_inter_vector_3D_old(n,m,a1,a2)
     inter_vector=[[0,0,0],n*a1,-n*a1,m*a2,-m*a2,m*a2-n*a1,n*a1-m*a2,m*a2+n*a1,-n*a1-m*a2]
     return inter_vector
 end
@@ -247,7 +250,10 @@ end
 
 
 
-
+function get_inter_vector_3D(n,m,a1,a2)
+    inter_vector=[[0,0,0],n*a1,m*a2,m*a2-n*a1]
+    return inter_vector
+end
 
 
 function get_lattice_3D_rotated_2(lattice,n_a1,n_a2,z,theta,r0,a)   #theta in units of 1, z: layer-index  #add confinement in unitcell, r0: parallel alignment of layer, a=lattice constant   
@@ -273,11 +279,11 @@ function get_lattice_3D_rotated_2(lattice,n_a1,n_a2,z,theta,r0,a)   #theta in un
 end
 
 function get_twisted_lattice_2(BC,lattice,n_a1,n_a2,m,r,d,r0)
+    t0=now()
     R,a1,a2=get_lattice_3D_rotated_2(lattice,n_a1,n_a2,0,0,[0,0,0],2)
-    theta, A1, A2=get_theta(m,r,a1,a2)
+    theta, A1, A2, n_sites=get_theta(m,r,a1,a2)
     R2,a1_2,a2_2=get_lattice_3D_rotated_2(lattice,n_a1,n_a2,d,theta,r0,2)
-    R=merge_R(R,R2)
-    R_unitcell,n1,n2=get_unit_cell_2(R,A1,A2,a1,a2,a1_2,a2_2)
+    R_unitcell,n1,n2=get_unit_cell_2(R,R2,A1,A2,a1,a2,a1_2,a2_2,n_sites)
     #plot_R(R)
     if !(n1==n2)
         println("number of sites on different layers mismatch: ", n1," ",n2)
@@ -293,35 +299,47 @@ function get_twisted_lattice_2(BC,lattice,n_a1,n_a2,m,r,d,r0)
         inter_vector=[[0,0,0]]
     end
 
-    R,a1,a2=get_lattice_3D_rotated_2(lattice,4*n_a1,4*n_a2,0,0,(a1+a2)/4,1)
-    R2,a1_2,a2_2=get_lattice_3D_rotated_2(lattice,4*n_a1,4*n_a2,d,theta,r0+(a1_2+a2_2)/4,1)
-    R=merge_R(R,R2)
-    if !(check_R(R_unitcell,inter_vector,R))
-        println("wrong unitvector, superstructure not periodic; or R not large enough")
-    end
-    
+    #R,a1,a2=get_lattice_3D_rotated_2(lattice,4*n_a1,4*n_a2,0,0,(a1+a2)/4,1)
+    #R2,a1_2,a2_2=get_lattice_3D_rotated_2(lattice,4*n_a1,4*n_a2,d,theta,r0+(a1_2+a2_2)/4,1)
+    #R=merge_R(R,R2)
+    #if !(check_R(R_unitcell,inter_vector,R))
+    #    println("wrong unitvector, superstructure not periodic; or R not large enough")
+    #end
+    t1=now()
+    println("time for geometry: ",t1-t0)
     return R_unitcell, inter_vector, A1, A2, theta
 end
 
-function get_unit_cell_2(R,A1,A2,a1,a2,a1_2,a2_2)
-    R_unitcell=[]
+function get_unit_cell_2(R,R2,A1,A2,a1,a2,a1_2,a2_2,n_sites)
+    n_sites=n_sites*8   # for triangular, the factor is 2*4=8
+    R_unitcell=Array{Any}(undef,n_sites)
     N=size(R,1)
     n1=0
     n2=0
+    n=1
     for i=1:N
         if check_site_in_unit_cell(R[i],A1,A2)
-            if R[i][3]==0
-                n1=n1+1
-                push!(R_unitcell,R[i],R[i]+a1/2,R[i]+a2/2,R[i]+a1/2+a2/2)
-            elseif round(R[i][3],digits=2)==1
-                n2=n2+1
-                push!(R_unitcell,R[i],R[i]+a1_2/2,R[i]+a2_2/2,R[i]+a1_2/2+a2_2/2)
-            end
+            n1=n1+1
+            R_unitcell[n]=R[i]
+            R_unitcell[n+1]=R[i]+a1/2
+            R_unitcell[n+2]=R[i]+a2/2
+            R_unitcell[n+3]=R[i]+a1/2+a2/2
+            n=n+4
+        end
+        if check_site_in_unit_cell(R2[i],A1,A2)
+            n2=n2+1
+            R_unitcell[n]=R2[i]
+            R_unitcell[n+1]=R2[i]+a1_2/2
+            R_unitcell[n+2]=R2[i]+a2_2/2
+            R_unitcell[n+3]=R2[i]+a1_2/2+a2_2/2
+            n=n+4
         end
     end
 
     return R_unitcell,n1,n2
 end
+
+
 
 #n_a1=50
 #n_a2=50

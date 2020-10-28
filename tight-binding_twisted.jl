@@ -22,7 +22,46 @@ struct get_hamiltonian
     a1_2
 end
 
+
+#for twisted lattice, number of sites very big, need sparse matrix, to avoid reallocation of data, create it from [row,col,val], and preassign large enough length to row/col/val.
 function get_H_twisted_bilayer(R,r,t_xy,t_z,d,lambda,mode,theta,r0)  # d: inter-layer distance, lambda: parameter, mode="uniform_hop" or "pi-flux"
+    t0=now()
+    N=size(R,1)
+
+    #H=spzeros(Complex,N,N)                        # H_QSL is spin-degen
+    I,J,value=ones(Int,N*13),ones(Int,N*13),zeros(Complex,N*13)
+    n=1
+    for i=1:N
+        for j=1:N
+            dR=R[i]-(R[j]+r)
+            z=dR[3]
+            L=norm(dR)
+                               
+            if abs(z)>0.01
+                if abs(t_z*(z^2/L^2)*exp(-lambda*(L-d)))>0.0001
+                    I[n]=i
+                    J[n]=j
+                    value[n]=t_z*(z^2/L^2)*exp(-lambda*(L-d))
+                    n+=1
+                    #H[i,j]=H[i,j]+t_z*(z^2/L^2)*exp(-lambda*(L-d))         # from j to i
+                end
+            elseif 0.9<L<1.1
+                t=get_hopping(R[i],R[j]+r,t_xy,mode,theta,r0) 
+                I[n]=i
+                J[n]=j
+                value[n]=t
+                n+=1                           
+            end
+        end
+    end
+    H=sparse(I,J,value,N,N)
+    H=dropzeros(H)
+    t1=now()
+    println("time to construct H: ",t1-t0)
+    return H
+end
+
+function get_H_twisted_bilayer_old(R,r,t_xy,t_z,d,lambda,mode,theta,r0)  # d: inter-layer distance, lambda: parameter, mode="uniform_hop" or "pi-flux"
     N=size(R,1)
     R2=[x+r for x in R]
 
@@ -48,6 +87,7 @@ function get_H_twisted_bilayer(R,r,t_xy,t_z,d,lambda,mode,theta,r0)  # d: inter-
     return H
 end
 
+# for H_inter, H.tx+ty is always 0,only H.tx H.ty and H.tx-ty is nonzero, because theta(a1,a2)=60degree
 function get_H_inter_twisted_bilayer(R,inter_vector,t_xy,t_z,d,lambda,mode,theta,r0)
     n_inter=size(inter_vector,1)
     H_inter=[]
@@ -60,6 +100,22 @@ function get_H_inter_twisted_bilayer(R,inter_vector,t_xy,t_z,d,lambda,mode,theta
 end
 
 function get_Hk(R,inter_vector,k,H_inter)
+    #t0=now()
+    N=size(R,1)
+    n_inter=size(inter_vector,1)
+    H=H_inter[1]
+    
+    for nn=2:n_inter
+        r=inter_vector[nn]
+        phase=k[1]*r[1]+k[2]*r[2]
+        H+=exp(im*phase)*H_inter[nn]+adjoint(exp(im*phase)*H_inter[nn])   # R2=R+r, hop=R^dagR2, phase=kr
+    end
+    #t1=now()
+    #println("time to construct Hk: ", t1-t0)
+    return H 
+end
+
+function get_Hk_old(R,inter_vector,k,H_inter)
     N=size(R,1)
     n_inter=size(inter_vector,1)
     H=spzeros(Complex,N,N)

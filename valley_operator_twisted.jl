@@ -23,22 +23,32 @@ struct get_hamiltonian
 end
 
 function get_valley_operator_twisted_bilayer(R,r,mode,theta,r0)  # d: inter-layer distance, lambda: parameter, mode="uniform_hop" or "pi-flux"
+    t0=now()
     N=size(R,1)
-    R2=[x+r for x in R]
 
-    P=spzeros(Complex,N,N)                        # H_QSL is spin-degen
-    #I,J,value=[],[],[]
+    I,J,value=ones(Int,N*13),ones(Int,N*13),zeros(Complex,N*13)
+    n=1
     for i=1:N
         for j=1:N
-            dR=R[i]-R2[j]
+            dR=R[i]-(R[j]+r)
             z=dR[3]
+            L=norm(dR)
                                
-            if abs(z)<0.01
-                t=get_valley_operator_hopping(R[i],R2[j],mode,theta,r0) 
-                P[i,j]=P[i,j]+t                           
+            if abs(z)<0.01 && L<2
+                t=get_valley_operator_hopping(R[i],R[j]+r,mode,theta,r0) 
+                if abs(t)>0
+                    I[n]=i
+                    J[n]=j
+                    value[n]=t
+                    n+=1
+                end                           
             end
         end
     end
+    P=sparse(I,J,value,N,N)
+    P=dropzeros(P)
+    t1=now()
+    println("time to construct P: ",t1-t0)
     return P
 end
 
@@ -97,6 +107,20 @@ function get_valley_operator_inter_twisted_bilayer(R,inter_vector,mode,theta,r0)
 end
 
 function get_Pk(R,inter_vector,k,P_inter)
+    N=size(R,1)
+    n_inter=size(inter_vector,1)
+    P=P_inter[1]
+    
+    for nn=1:n_inter
+        r=inter_vector[nn]
+        phase=k[1]*r[1]+k[2]*r[2]
+        P+=exp(im*phase)*P_inter[nn]+adjoint(exp(im*phase)*P_inter[nn])   # R2=R+r, hop=R^dagR2, phase=kr
+    end
+
+    return P 
+end
+
+function get_Pk_old(R,inter_vector,k,P_inter)
     N=size(R,1)
     n_inter=size(inter_vector,1)
     P=spzeros(Complex,N,N)

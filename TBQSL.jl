@@ -18,8 +18,8 @@ colormap=pyimport("matplotlib.colors")
 using Dates
 
 function main(m,t_z)
-    n_a1=99
-    n_a2=99                # these two create a large system that allows choosing a unitcell inside, pay attention to choose them large enough
+    n_a1=159
+    n_a2=159                # these two create a large system that allows choosing a unitcell inside, pay attention to choose them large enough
     #m=50
 
     r=1
@@ -46,7 +46,7 @@ function main(m,t_z)
     #t_z=0.1
     lambda=10
     
-    n_k=100
+    n_k=50
     e_max=0.2
     n_e=100
 
@@ -54,21 +54,23 @@ function main(m,t_z)
     t0=now()
     H_inter=get_H_inter_twisted_bilayer(R_unitcell,inter_vector,t_xy,t_z,d,lambda,mode,theta,r0)
     P_inter=get_valley_operator_inter_twisted_bilayer(R_unitcell,inter_vector,mode,theta,r0)
+
     #H_inter=H_inter.+0.01*P_inter
     #P=get_valley_operator_twisted_bilayer(R_unitcell,[0,0,0],mode,theta,r0)
     #plot_P(P,R_unitcell)
-
+    get_band_twisted(R_unitcell,inter_vector,H_inter,b1,b2,n_k,n_bands,P_inter)
+    get_energy_cut(R_unitcell,inter_vector,H_inter,b1,b2,n_k,n_bands,P_inter)
     #plot_H_2(H_inter,R_unitcell,inter_vector)
     #plot_H(H_inter[1],R_unitcell)
-    #get_band_twisted(R_unitcell,inter_vector,H_inter,b1,b2,n_k,n_bands,P_inter)
     
-    t1=now()
+    
+
     println("time to construct H: ", t1-t0)
     energies=get_eigvals_twisted(R_unitcell,inter_vector,H_inter,b1,b2,n_k,n_bands)
     t3=now()
     println("time to compute eigs: ", t3-t1)
 
-    eta=0.005
+    eta=0.01
     omegas=[]
     DOSs=[]
     for i=0:n_e
@@ -92,6 +94,7 @@ function get_band_twisted(R_unitcell,inter_vector,H_inter,b1,b2,n_k,n_bands,P_in
     energies=[]
     valley_polarization=[]
     for i=0:n_k
+        t0=now()
         println("summing over k point: ",i)
         k=b2*i/n_k+(b1-b2/2)/2#i/n_k*(2*b1+b2)####-b1/2+i/n_k*b1###
         #if i<=n_k/2
@@ -103,7 +106,7 @@ function get_band_twisted(R_unitcell,inter_vector,H_inter,b1,b2,n_k,n_bands,P_in
         H=get_Hk(R_unitcell,inter_vector,k,H_inter)
         P=get_Pk(R_unitcell,inter_vector,k,P_inter)#get_layer_operator_twisted_bilayer(R_unitcell)#
         #H=H+0.05*P
-        eigvals,eigvecs=eigs(H,nev=n_bands,sigma=0.01,which=:LM,maxiter=10000)
+        eigvals,eigvecs=eigs(H,nev=n_bands,sigma=0.1,which=:LM,maxiter=10000)
         #F=eigen(Matrix(H))
         #eigvals,eigvecs=F.values,F.vectors
         #eigvals=real(eigvals)
@@ -114,6 +117,8 @@ function get_band_twisted(R_unitcell,inter_vector,H_inter,b1,b2,n_k,n_bands,P_in
             psi=eigvecs[:,i_band]
             push!(valley_polarization,real(adjoint(psi)*P*psi))
         end
+        t1=now()
+        println("time to diagonalize single Hk: ", t1-t0)
     end
     plt.figure(figsize=(6,6),dpi=80)
     colors=[(1,0,0),(0,1,0),(0,0,1)]
@@ -127,12 +132,70 @@ function get_band_twisted(R_unitcell,inter_vector,H_inter,b1,b2,n_k,n_bands,P_in
     return momenta, energies
 end
 
+function get_energy_cut(R_unitcell,inter_vector,H_inter,b1,b2,n_k,n_bands,P_inter)
+    kx=[]
+    ky=[]
+    valley_polarization=[]
+    omega=0.02
+    
+    for i=1:n_k
+        for j=1:n_k
+            k=b1/2+b2/2+(2*i-n_k)/n_k*0.005*[2*pi,0]+(2*j-n_k)/n_k*0.005*[0,2*pi]#i/n_k*(2*b1+b2)####-b1/2+i/n_k*b1###
+
+        
+            H=get_Hk(R_unitcell,inter_vector,k,H_inter)
+            P=get_Pk(R_unitcell,inter_vector,k,P_inter)#get_layer_operator_twisted_bilayer(R_unitcell)#
+      
+            eigvals,eigvecs=eigs(H,nev=n_bands,sigma=0.01,which=:LM,maxiter=10000)
+            
+
+            for i_band=1:n_bands
+                if abs(omega-eigvals[i_band])<0.000001
+                    push!(kx,k[1])
+                    push!(ky,k[2])
+                    psi=eigvecs[:,i_band]
+                    push!(valley_polarization,real(adjoint(psi)*P*psi))
+                end
+            end
+
+            k=b1/2+(2*i-n_k)/n_k*0.005*[2*pi,0]+(2*j-n_k)/n_k*0.005*[0,2*pi]#i/n_k*(2*b1+b2)####-b1/2+i/n_k*b1###
+
+        
+            H=get_Hk(R_unitcell,inter_vector,k,H_inter)
+            P=get_Pk(R_unitcell,inter_vector,k,P_inter)#get_layer_operator_twisted_bilayer(R_unitcell)#
+      
+            eigvals,eigvecs=eigs(H,nev=n_bands,sigma=0.01,which=:LM,maxiter=10000)
+            
+
+            for i_band=1:n_bands
+                if abs(omega-eigvals[i_band])<0.002
+                    push!(kx,k[1])
+                    push!(ky,k[2])
+                    psi=eigvecs[:,i_band]
+                    push!(valley_polarization,real(adjoint(psi)*P*psi))
+                end
+            end
+        end
+    end
+    plt.figure(figsize=(6,6),dpi=80)
+    colors=[(1,0,0),(0,1,0),(0,0,1)]
+    cm=colormap.LinearSegmentedColormap.from_list("my_list", colors)
+    sc=plt.scatter(kx, ky,c=valley_polarization,cmap=cm,vmin=-1,vmax=1)
+    plt.colorbar(sc)
+    plt.axis([-pi,pi,-pi,pi])
+    plt.xlabel("kx")
+    plt.ylabel("ky")
+    plt.show()
+    return momenta, energies
+end
+
 function get_eigvals_twisted(R_unitcell,inter_vector,H_inter,b1,b2,n_k,n_bands)
     energies=[]
     for i=1:n_k
         for j=1:n_k
             println("summing over k point: ",i," ",j)
-            k=i/n_k*b1+j/n_k*b2
+            #k=i/n_k*b1+j/n_k*b2
+            k=rand()*b1+rand()*b2
         
             H=get_Hk(R_unitcell,inter_vector,k,H_inter)
   
@@ -158,9 +221,9 @@ end
 omegas=[]
 DOSs=[]
 tzs=[]
-m=1
+m=21
 for i=0:0
-    t_z=0.1+0.1*i
+    t_z=0.5+0.1*i
     println("computing t_z=", t_z)
     omega,DOS=main(m,t_z)
     n=size(omega,1)
