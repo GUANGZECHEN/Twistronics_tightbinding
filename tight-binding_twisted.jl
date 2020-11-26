@@ -16,22 +16,34 @@ include("Geometry_twisted.jl")
 
 struct get_hamiltonian
     intra
-    a1
-    a2
-    a12
-    a1_2
+    tx
+    ty
+    txy
+    geometry::geometry_twisted
 end
 
 
 #for twisted lattice, number of sites very big, need sparse matrix, to avoid reallocation of data, create it from [row,col,val], and preassign large enough length to row/col/val.
-function get_H_twisted_bilayer(R,r,t_xy,t_z,d,lambda,mode,theta,r0)  # d: inter-layer distance, lambda: parameter, mode="uniform_hop" or "pi-flux"
+function get_H_twisted_bilayer(R,r,t_xy,t_z,d,lambda,mode,theta,r0,interlayer_bias=0)  # d: inter-layer distance, lambda: parameter, mode="uniform_hop" or "pi-flux"
     t0=now()
     N=size(R,1)
 
     #H=spzeros(Complex,N,N)                        # H_QSL is spin-degen
-    I,J,value=ones(Int,N*13),ones(Int,N*13),zeros(Complex,N*13)
+    I,J,value=ones(Int,N*100),ones(Int,N*100),zeros(Complex,N*100)
     n=1
     for i=1:N
+        if R[i][3]!=0
+           I[n]=i
+           J[n]=i
+           value[n]=interlayer_bias/2
+           n+=1
+        else
+           I[n]=i
+           J[n]=i
+           value[n]=-interlayer_bias/2
+           n+=1
+        end
+
         for j=1:N
             dR=R[i]-(R[j]+r)
             z=dR[3]
@@ -61,74 +73,32 @@ function get_H_twisted_bilayer(R,r,t_xy,t_z,d,lambda,mode,theta,r0)  # d: inter-
     return H
 end
 
-function get_H_twisted_bilayer_old(R,r,t_xy,t_z,d,lambda,mode,theta,r0)  # d: inter-layer distance, lambda: parameter, mode="uniform_hop" or "pi-flux"
-    N=size(R,1)
-    R2=[x+r for x in R]
-
-    H=spzeros(Complex,N,N)                        # H_QSL is spin-degen
-    #I,J,value=[],[],[]
-    for i=1:N
-        for j=1:N
-            dR=R[i]-R2[j]
-            z=dR[3]
-            L=norm(dR)
-                               
-            if abs(z)>0.01
-                if abs(t_z*(z^2/L^2)*exp(-lambda*(L-d)))>0.0001
-                    H[i,j]=H[i,j]+t_z*(z^2/L^2)*exp(-lambda*(L-d))         # from j to i
-                end
-            elseif 0.9<L<1.1
-                t=get_hopping(R[i],R2[j],t_xy,mode,theta,r0) 
-                H[i,j]=H[i,j]+t                           
-            end
-        end
-    end
-
-    return H
-end
-
 # for H_inter, H.tx+ty is always 0,only H.tx H.ty and H.tx-ty is nonzero, because theta(a1,a2)=60degree
-function get_H_inter_twisted_bilayer(R,inter_vector,t_xy,t_z,d,lambda,mode,theta,r0)
-    n_inter=size(inter_vector,1)
-    H_inter=[]
-    for nn=1:n_inter
-        r=inter_vector[nn]
-        H=get_H_twisted_bilayer(R,r,t_xy,t_z,d,lambda,mode,theta,r0)
-        push!(H_inter,H)
-    end
-    return H_inter    
+function get_H_inter_twisted_bilayer(g::geometry_twisted, t_xy,t_z,lambda,mode,interlayer_bias=0)
+    R=g.sites
+    d=g.inter_distance
+    theta=g.twist_angle
+    r0=g.inter_alignment
+    H_intra=get_H_twisted_bilayer(R,[0,0,0],t_xy,t_z,d,lambda,mode,theta,r0,interlayer_bias)
+    H_tx=get_H_twisted_bilayer(R,g.inter_vector.x,t_xy,t_z,d,lambda,mode,theta,r0)
+    H_ty=get_H_twisted_bilayer(R,g.inter_vector.y,t_xy,t_z,d,lambda,mode,theta,r0)
+    H_txy=get_H_twisted_bilayer(R,g.inter_vector.xy,t_xy,t_z,d,lambda,mode,theta,r0)
+    H=get_hamiltonian(H_intra,H_tx,H_ty,H_txy,g)
+    return H    
 end
 
-function get_Hk(R,inter_vector,k,H_inter)
-    #t0=now()
-    N=size(R,1)
-    n_inter=size(inter_vector,1)
-    H=H_inter[1]
-    
-    for nn=2:n_inter
-        r=inter_vector[nn]
-        phase=k[1]*r[1]+k[2]*r[2]
-        H+=exp(im*phase)*H_inter[nn]+adjoint(exp(im*phase)*H_inter[nn])   # R2=R+r, hop=R^dagR2, phase=kr
-    end
-    #t1=now()
-    #println("time to construct Hk: ", t1-t0)
-    return H 
+function get_Hk(H::get_hamiltonian,k::Array{Float64,1})
+    H0=exp(im*dot(k,H.geometry.inter_vector.x))*H.tx+exp(im*dot(k,H.geometry.inter_vector.y))*H.ty+exp(im*dot(k,H.geometry.inter_vector.xy))*H.txy
+    Hk=H.intra+H0+adjoint(H0)  
+    return Hk 
 end
 
-function get_Hk_old(R,inter_vector,k,H_inter)
-    N=size(R,1)
-    n_inter=size(inter_vector,1)
-    H=spzeros(Complex,N,N)
-    
-    for nn=1:n_inter
-        r=inter_vector[nn]
-        phase=k[1]*r[1]+k[2]*r[2]
-        H=H+exp(im*phase)*H_inter[nn]   # R2=R+r, hop=R^dagR2, phase=kr
-    end
-    if norm(H-adjoint(H))>0.0001
-        println("H is non-Hermitian ", norm(H-adjoint(H)))
-    end
-    return H 
+function get_Hk_ribbon(H::get_hamiltonian,k::Array{Float64,1})   # here k represents the phase difference
+    @assert k[1]*k[2]==0 "please input 1D momenta"
+    k[1]==0 ? H0=exp(im*k[2])*H.ty : H0=exp(im*k[1])*H.tx
+        
+    Hk=H.intra+H0+adjoint(H0)  
+    return Hk
 end
 
 function get_hopping(R,R2,t_xy,mode,theta,r0)
@@ -219,3 +189,28 @@ function plot_H_2(H_inter,R,inter_vector)
     plt.show()
 end
 
+
+
+function test_tight_binding_twisted()
+    n_a1=50
+    n_a2=50
+    m=1
+    r=1
+    r0=[0,0,0]
+    d=1
+    lattice,mode="triangular","pi_flux"
+    BC="PBC"
+
+    g=get_twisted_lattice_2(lattice,n_a1,n_a2,m,r,d,r0)
+    println(g.twist_angle*180/pi)
+    println(size(g.sites,1))
+    
+    t_xy=1
+    t_z=0
+    lambda=10
+    H=get_H_inter_twisted_bilayer(g,t_xy,t_z,lambda,mode)
+    Hk=get_Hk(H,[0,0,0])
+    plot_H(Hk,g.sites)
+end
+
+#test_tight_binding_twisted()
