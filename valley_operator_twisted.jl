@@ -14,14 +14,6 @@ include("Geometry_twisted.jl")
 
 ### for triangular lattice, use pi-flux hopping!!!
 
-struct get_hamiltonian
-    intra
-    a1
-    a2
-    a12
-    a1_2
-end
-
 function get_valley_operator_twisted_bilayer(R,r,mode,theta,r0)  # d: inter-layer distance, lambda: parameter, mode="uniform_hop" or "pi-flux"
     t0=now()
     N=size(R,1)
@@ -95,43 +87,31 @@ function get_valley_operator_hopping(R,R2,mode,theta,r0)
     end
 end
 
-function get_valley_operator_inter_twisted_bilayer(R,inter_vector,mode,theta,r0)
-    n_inter=size(inter_vector,1)
-    P_inter=[]
-    for nn=1:n_inter
-        r=inter_vector[nn]
-        P=get_valley_operator_twisted_bilayer(R,r,mode,theta,r0)
-        push!(P_inter,P)
-    end
-    return P_inter    
+function get_valley_operator_inter_twisted_bilayer(g::geometry_twisted,mode)
+    R=g.sites
+    theta=g.twist_angle
+    r0=g.inter_alignment
+
+    P_intra=get_valley_operator_twisted_bilayer(R,[0,0,0],mode,theta,r0)
+    P_tx=get_valley_operator_twisted_bilayer(R,g.inter_vector.x,mode,theta,r0)
+    P_ty=get_valley_operator_twisted_bilayer(R,g.inter_vector.y,mode,theta,r0)
+    P_txy=get_valley_operator_twisted_bilayer(R,g.inter_vector.xy,mode,theta,r0)
+    P=get_hamiltonian(P_intra,P_tx,P_ty,P_txy,g.inter_vector)
+    return P    
 end
 
-function get_Pk(R,inter_vector,k,P_inter)
-    N=size(R,1)
-    n_inter=size(inter_vector,1)
-    P=P_inter[1]
-    
-    for nn=1:n_inter
-        r=inter_vector[nn]
-        phase=k[1]*r[1]+k[2]*r[2]
-        P+=exp(im*phase)*P_inter[nn]+adjoint(exp(im*phase)*P_inter[nn])   # R2=R+r, hop=R^dagR2, phase=kr
-    end
-
-    return P 
+function get_Pk(P::get_hamiltonian,k::Array{Float64,1})
+    P0=exp(im*dot(k,P.inter_vector.x))*P.tx+exp(im*dot(k,P.inter_vector.y))*P.ty+exp(im*dot(k,P.inter_vector.xy))*P.txy
+    Pk=P.intra+P0+adjoint(P0)  
+    return Pk 
 end
 
-function get_Pk_old(R,inter_vector,k,P_inter)
-    N=size(R,1)
-    n_inter=size(inter_vector,1)
-    P=spzeros(Complex,N,N)
-    
-    for nn=1:n_inter
-        r=inter_vector[nn]
-        phase=k[1]*r[1]+k[2]*r[2]
-        P=P+exp(im*phase)*P_inter[nn]   # R2=R+r, hop=R^dagR2, phase=kr
-    end
-
-    return P 
+function get_Pk_ribbon(P::get_hamiltonian,k::Array{Float64,1})   # here k represents the phase difference
+    @assert k[1]*k[2]==0 "please input 1D momenta"
+    k[1]==0 ? P0=exp(im*k[2])*P.ty : P0=exp(im*k[1])*P.tx
+        
+    Pk=P.intra+P0+adjoint(P0)  
+    return Pk
 end
 
 function plot_H(H,R)
