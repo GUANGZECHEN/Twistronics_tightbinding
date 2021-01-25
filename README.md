@@ -1,3 +1,4 @@
 # Twistronics_tightbinding
-tight_binding_methods_for_twistronics\\
+tight_binding_methods_for_twistronics
+
 still building
