@@ -94,7 +94,6 @@ function next_nearest(site_a,site_b)
     return 1.1<norm(site_a-site_b)<1.9
 end
 
-
 function next_next_nearest(site_a,site_b)
     return 1.9<norm(site_a-site_b)<2.1
 end
@@ -102,10 +101,10 @@ end
 function plot_R(R)
     plt.figure(figsize=(6,6),dpi=80)
     N=size(R,1)
-    x=Array{Float64}(undef,Int(N/2))
-    y=Array{Float64}(undef,Int(N/2))
-    x2=Array{Float64}(undef,Int(N/2))
-    y2=Array{Float64}(undef,Int(N/2))
+    x=Array{Float64}(undef,Int(N))
+    y=Array{Float64}(undef,Int(N))
+    x2=Array{Float64}(undef,Int(N))
+    y2=Array{Float64}(undef,Int(N))
     j1=1
     j2=1
     for i=1:N
@@ -319,6 +318,22 @@ function get_unit_cell(R,R2,A1,A2,n_sites,n_A1=1,n_A2=1)
     return R_unitcell,n1,n2
 end
 
+function remove_layer_R(R,layer_index)
+    N=size(R,1)
+    for i=1:N
+        j=N+1-i
+        if R[j][3]==layer_index
+            deleteat!(R,j)
+        end
+    end
+    return R
+end
+
+function remove_layer_g(g,layer_index)
+    R=remove_layer_R(g.sites,layer_index)
+    return geometry_twisted(g.lattice,R,g.inter_vector,g.dimension,g.twist_angle,g.inter_distance,g.inter_alignment)
+end
+
 function test_geometry_twisted()
     n_a1=50
     n_a2=50
@@ -332,11 +347,13 @@ function test_geometry_twisted()
     g=get_twisted_lattice_2(lattice,n_a1,n_a2,m,r,d,r0,mode)
     println(g.twist_angle*180/pi)
     println(size(g.sites,1))
-    println(typeof(g))
+    #println(typeof(g))
+    remove_layer_g(g,1)
+    println(size(g.sites,1))
     plot_R(g.sites)
 end
 
-#test_geometry_twisted()
+test_geometry_twisted()
 #for i=0:40
 #    theta=(0.7+0.01*i)*pi/180
 #    m,factor=get_parameter_for_theta(theta)
