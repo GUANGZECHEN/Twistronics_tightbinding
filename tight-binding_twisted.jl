@@ -74,10 +74,11 @@ function get_H_twisted_bilayer(R,r,t_xy,t_z,d,lambda,mode,theta,r0,interlayer_bi
 end
 
 # for H_inter, H.tx+ty is always 0,only H.tx H.ty and H.tx-ty is nonzero, because theta(a1,a2)=60degree
-function get_H_inter_twisted_bilayer(g::geometry_twisted, t_xy,t_z,lambda,mode,interlayer_bias=0)
+function get_H_inter_twisted_bilayer(g::geometry_twisted, t_xy,t_z,lambda,mode,interlayer_bias=0,theta2=0)    #theta2: additional rotation of second layer w.r.t. first layer, can be n*2pi/3
     R=g.sites
     d=g.inter_distance
     theta=g.twist_angle
+    theta+=theta2
     r0=g.inter_alignment
     H_intra=get_H_twisted_bilayer(R,[0,0,0],t_xy,t_z,d,lambda,mode,theta,r0,interlayer_bias)
     H_tx=get_H_twisted_bilayer(R,g.inter_vector.x,t_xy,t_z,d,lambda,mode,theta,r0)
@@ -208,8 +209,8 @@ function test_tight_binding_twisted()
     t_xy=1
     t_z=0
     lambda=10
-    H=get_H_inter_twisted_bilayer(g,t_xy,t_z,lambda,mode)
-    Hk=get_Hk(H,[0,0,0])
+    H=get_H_inter_twisted_bilayer(g,t_xy,t_z,lambda,mode,0,pi)
+    Hk=get_Hk(H,[0.0,0.0,0.0])
     plot_H(Hk,g.sites)
 end
 

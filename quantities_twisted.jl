@@ -36,8 +36,8 @@ function get_band_twisted(H::get_hamiltonian,P::get_hamiltonian,k_points::Array{
             Hk=get_Hk_ribbon(H,k)
             Pk=get_Pk_ribbon(P,k)#get_layer_operator_twisted_bilayer(R_unitcell)#           
         end
-        #Hk=Hk+0.002*Pk
-        eigvals,eigvecs=eigs(Hk,nev=n_bands,sigma=0.01,which=:LM,maxiter=10000)
+        
+        eigvals,eigvecs=eigs(Hk,nev=n_bands,sigma=0.0001,which=:LM,maxiter=10000)
         #F=eigen(Matrix(H))
         #eigvals,eigvecs=F.values,F.vectors
         #eigvals=real(eigvals)
@@ -50,15 +50,38 @@ function get_band_twisted(H::get_hamiltonian,P::get_hamiltonian,k_points::Array{
             index+=1
         end
     end
-    #plt.figure(figsize=(6,6),dpi=80)
-    #colors=[(1,0,0),(0,1,0),(0,0,1)]
-    #cm=colormap.LinearSegmentedColormap.from_list("my_list", colors)
-    #sc=plt.scatter(momenta, energies,c=valley_polarization,cmap=cm,vmin=-1,vmax=1)
-    #plt.colorbar(sc)
-    #plt.axis([-1,n_k+1,-0.2,0.2])
-    #plt.xlabel("k")
-    #plt.ylabel("E")
-    #plt.show()
+    return momenta, energies, valley_polarization
+end
+
+function get_band_twisted_2(H::get_hamiltonian,P::get_hamiltonian,k_points::Array{Array{Float64,1},1},n_bands,dim=2) # dim=1 for ribbon geometry
+    n_k=size(k_points,1)
+    momenta=Array{Float64}(undef,Int(n_k*n_bands))
+    energies=Array{Float64}(undef,Int(n_k*n_bands))
+    valley_polarization=Array{Float64}(undef,Int(n_k*n_bands))
+    index=1
+    for i=1:n_k
+        k=k_points[i]
+        if dim==2
+            Hk=get_Hk(H,k)
+            Pk=get_Pk(P,k)#get_layer_operator_twisted_bilayer(R_unitcell)#
+        else
+            Hk=get_Hk_ribbon(H,k)
+            Pk=get_Pk_ribbon(P,k)#get_layer_operator_twisted_bilayer(R_unitcell)#           
+        end
+        Hk=Hk+0.05*Pk
+        eigvals,eigvecs=eigs(Hk,nev=n_bands,sigma=0.0001,which=:LM,maxiter=10000)
+        #F=eigen(Matrix(H))
+        #eigvals,eigvecs=F.values,F.vectors
+        #eigvals=real(eigvals)
+        #n_bands=size(eigvals,1)
+        for i_band=1:n_bands
+            momenta[index]=i
+            energies[index]=real(eigvals[i_band])
+            psi=eigvecs[:,i_band]
+            valley_polarization[index]=real(adjoint(psi)*Pk*psi)
+            index+=1
+        end
+    end
     return momenta, energies, valley_polarization
 end
 
@@ -73,7 +96,7 @@ function get_eigen_twisted(H::get_hamiltonian,k_points::Array{Array{Float64,1},1
         
         Hk=get_Hk(H,k)
   
-        eigvals,eigvecs=eigs(Hk,nev=n_bands,sigma=0.01,which=:LM,maxiter=10000)
+        eigvals,eigvecs=eigs(Hk,nev=n_bands,sigma=0.0001,which=:LM,maxiter=10000)
             
         for i_band=1:n_bands
             energies[ii]=eigvals[i_band]

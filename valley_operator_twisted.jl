@@ -14,7 +14,7 @@ include("Geometry_twisted.jl")
 
 ### for triangular lattice, use pi-flux hopping!!!
 
-function get_valley_operator_twisted_bilayer(R,r,mode,theta,r0)  # d: inter-layer distance, lambda: parameter, mode="uniform_hop" or "pi-flux"
+function get_valley_operator_twisted_bilayer(R,r,mode,theta,r0,layer_factor=1)  # d: inter-layer distance, lambda: parameter, mode="uniform_hop" or "pi-flux"
     t0=now()
     N=size(R,1)
 
@@ -27,7 +27,7 @@ function get_valley_operator_twisted_bilayer(R,r,mode,theta,r0)  # d: inter-laye
             L=norm(dR)
                                
             if abs(z)<0.01 && L<2
-                t=get_valley_operator_hopping(R[i],R[j]+r,mode,theta,r0) 
+                t=get_valley_operator_hopping(R[i],R[j]+r,mode,theta,r0,layer_factor) 
                 if abs(t)>0
                     I[n]=i
                     J[n]=j
@@ -44,13 +44,13 @@ function get_valley_operator_twisted_bilayer(R,r,mode,theta,r0)  # d: inter-laye
     return P
 end
 
-function get_valley_operator_hopping(R,R2,mode,theta,r0)
-    layer_factor=1
+function get_valley_operator_hopping(R,R2,mode,theta,r0,layer_factor=1)
+    factor=1
     U=rotation_along_z_3D(-(theta))
     if R[3]==1
         R=U*(R-r0)
         R2=U*(R2-r0)
-        layer_factor=1
+        factor=layer_factor
     end
     x=R[1]-R2[1]
     y=R[2]-R2[2]
@@ -81,27 +81,27 @@ function get_valley_operator_hopping(R,R2,mode,theta,r0)
         elseif round(x,digits=3)==0 && round(y/sqrt(3),digits=3)==1
             hop=im
         end
-        return hop*layer_factor/4                              
+        return hop*factor/4                              
     else
         println("invalid mode for valley operator")
     end
 end
 
-function get_valley_operator_inter_twisted_bilayer(g::geometry_twisted,mode)
+function get_valley_operator_inter_twisted_bilayer(g::geometry_twisted,mode,layer_factor=1)
     R=g.sites
     theta=g.twist_angle
     r0=g.inter_alignment
 
-    P_intra=get_valley_operator_twisted_bilayer(R,[0,0,0],mode,theta,r0)
-    P_tx=get_valley_operator_twisted_bilayer(R,g.inter_vector.x,mode,theta,r0)
-    P_ty=get_valley_operator_twisted_bilayer(R,g.inter_vector.y,mode,theta,r0)
-    P_txy=get_valley_operator_twisted_bilayer(R,g.inter_vector.xy,mode,theta,r0)
-    P=get_hamiltonian(P_intra,P_tx,P_ty,P_txy,g.inter_vector)
+    P_intra=get_valley_operator_twisted_bilayer(R,[0,0,0],mode,theta,r0,layer_factor)
+    P_tx=get_valley_operator_twisted_bilayer(R,g.inter_vector.x,mode,theta,r0,layer_factor)
+    P_ty=get_valley_operator_twisted_bilayer(R,g.inter_vector.y,mode,theta,r0,layer_factor)
+    P_txy=get_valley_operator_twisted_bilayer(R,g.inter_vector.xy,mode,theta,r0,layer_factor)
+    P=get_hamiltonian(P_intra,P_tx,P_ty,P_txy,g)
     return P    
 end
 
 function get_Pk(P::get_hamiltonian,k::Array{Float64,1})
-    P0=exp(im*dot(k,P.inter_vector.x))*P.tx+exp(im*dot(k,P.inter_vector.y))*P.ty+exp(im*dot(k,P.inter_vector.xy))*P.txy
+    P0=exp(im*dot(k,P.geometry.inter_vector.x))*P.tx+exp(im*dot(k,P.geometry.inter_vector.y))*P.ty+exp(im*dot(k,P.geometry.inter_vector.xy))*P.txy
     Pk=P.intra+P0+adjoint(P0)  
     return Pk 
 end
