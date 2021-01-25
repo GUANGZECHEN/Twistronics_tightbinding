@@ -1,3 +1,5 @@
+module Geometry_twisted
+
 using LinearAlgebra
 using DelimitedFiles
 using Statistics
@@ -118,9 +120,16 @@ function plot_R(R)
             j2+=1
         end
     end
-    #println(size(x,1),size(y,1))
-    plt.scatter(x,y,color="red",s=10)
-    plt.scatter(x2,y2,color="blue",s=10)
+    if j1>1
+        x=x[1:j1-1]
+        y=y[1:j1-1]
+        plt.scatter(x,y,color="red",s=10)
+    end
+    if j2>1
+        x2=x2[1:j2-1]
+        y2=y2[1:j2-1]
+        plt.scatter(x2,y2,color="blue",s=10)
+    end
     plt.axis([-40,40,-40,40])
     plt.xlabel("")
     plt.ylabel("")
@@ -353,13 +362,7 @@ function test_geometry_twisted()
     plot_R(g.sites)
 end
 
-test_geometry_twisted()
-#for i=0:40
-#    theta=(0.7+0.01*i)*pi/180
-#    m,factor=get_parameter_for_theta(theta)
-#    println(m," ",factor)
-#end
 
 
-
+end  #end module
 
